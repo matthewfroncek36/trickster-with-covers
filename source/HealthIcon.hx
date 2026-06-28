@@ -30,6 +30,9 @@ class HealthIcon extends FlxSprite
 			case 'cryingEmoji':
 				loadGraphic(Paths.image('emoji/exTrickyIcons','clown'), true, 150, 150);
 				animation.add('cryingEmoji', [0, 1], 0, false, isPlayer);
+			case 'Mario':
+				loadGraphic(Paths.image('mario/exTrickyIcons','clown'), true, 150, 150);
+				animation.add('Mario', [0, 1], 0, false, isPlayer);
 			default:
 				loadGraphic(Paths.image('iconGrid'), true, 150, 150);
 
