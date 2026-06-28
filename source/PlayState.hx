@@ -1133,13 +1133,15 @@ class PlayState extends MusicBeatState
 
 			trace('starting cutscene');
 
+			var cutAssetPrefix:String = SONG.player2 == 'Mario' ? 'mario' : (SONG.player2 == 'cryingEmoji' ? 'emoji' : '');
+
 			var black:FlxSprite = new FlxSprite(-300, -120).makeGraphic(FlxG.width * 2, FlxG.height * 2, FlxColor.WHITE);
 			black.scrollFactor.set();
 			black.alpha = 0;
 			
 			var animation:FlxSprite = new FlxSprite(200,300); // create the fuckin thing
 
-			animation.frames = Paths.getSparrowAtlas('trickman','clown'); // add animation from sparrow
+			animation.frames = Paths.getSparrowAtlas(cutAssetPrefix + (cutAssetPrefix != '' ? '/' : '') + 'trickman','clown'); // add animation from sparrow
 			animation.antialiasing = true;
 			animation.animation.addByPrefix('cut1','Cutscene 1', 24, false);
 			animation.animation.addByPrefix('cut2','Cutscene 2', 24, false);
@@ -1316,9 +1318,10 @@ class PlayState extends MusicBeatState
 
 			var playonce:Bool = false;
 
-			
+			var cutAssetPrefix:String = SONG.player2 == 'Mario' ? 'mario' : (SONG.player2 == 'cryingEmoji' ? 'emoji' : '');
+
 			trans = new FlxSprite(-400,-760);
-			trans.frames = Paths.getSparrowAtlas('Jaws','clown');
+			trans.frames = Paths.getSparrowAtlas(cutAssetPrefix + (cutAssetPrefix != '' ? '/' : '') + 'Jaws','clown');
 			trans.antialiasing = true;
 
 			trans.animation.addByPrefix("Close","Jaws smol", 24, false);
@@ -1350,11 +1353,11 @@ class PlayState extends MusicBeatState
 			gf.alpha = 0;
 			remove(boyfriend);
 			var nevada:FlxSprite = new FlxSprite(260,FlxG.height * 0.7);
-			nevada.frames = Paths.getSparrowAtlas('somewhere','clown'); // add animation from sparrow
+			nevada.frames = Paths.getSparrowAtlas(cutAssetPrefix + (cutAssetPrefix != '' ? '/' : '') + 'somewhere','clown'); // add animation from sparrow
 			nevada.antialiasing = true;
 			nevada.animation.addByPrefix('nevada', 'somewhere idfk', 24, false);
 			var animation:FlxSprite = new FlxSprite(-50,200); // create the fuckin thing
-			animation.frames = Paths.getSparrowAtlas('intro','clown'); // add animation from sparrow
+			animation.frames = Paths.getSparrowAtlas(cutAssetPrefix + (cutAssetPrefix != '' ? '/' : '') + 'intro','clown'); // add animation from sparrow
 			animation.antialiasing = true;
 			animation.animation.addByPrefix('fuckyou','Symbol', 24, false);
 			animation.setGraphicSize(Std.int(animation.width * 1.2));
