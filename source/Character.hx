@@ -509,7 +509,7 @@ class Character extends FlxSprite
 				case 'gf':
 					if (animation.curAnim.name == 'hairFall' && animation.curAnim.finished)
 						playAnim('danceRight');
-				case 'exTricky' | 'cryingEmoji':
+				case 'exTricky' | 'cryingEmoji' | 'Mario':
 					if (exSpikes.animation.frameIndex >= 3 && animation.curAnim.name == 'singUP')
 					{
 						trace('paused');
@@ -657,7 +657,7 @@ class Character extends FlxSprite
 			{
 				animation.play(AnimName, Force, Reversed, Frame);
 
-				if (curCharacter == 'exTricky' || curCharacter == 'cryingEmoji')
+				if (curCharacter == 'exTricky' || curCharacter == 'cryingEmoji' || curCharacter == 'Mario')
 				{
 					if (AnimName == 'singUP')
 					{
