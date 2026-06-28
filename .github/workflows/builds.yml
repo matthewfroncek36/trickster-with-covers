@@ -1,0 +1,290 @@
+name: Builds
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: ubuntu-latest
+            target: linux
+          - os: macos-latest
+            target: mac
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@master
+        with:
+          haxe-version: 4.2.5
+
+      - name: Install macOS dependencies
+        if: matrix.target == 'mac'
+        run: brew install vlc
+
+      - name: Install Linux dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-multilib gcc-multilib libc6-dev-i386 libvlc-dev libvlccore-dev
+
+      - name: Install Haxelibs
+        shell: bash
+        run: |
+          haxelib install lime 7.9.0
+          haxelib install openfl 9.0.2
+          haxelib install hxcpp
+          haxelib install flixel 4.11.0
+          haxelib install flixel-addons 2.8.0
+          haxelib install flixel-ui 2.3.3
+          haxelib install hscript 2.4.0
+          haxelib install actuate
+          haxelib install newgrounds 1.1.5
+          haxelib install polymod 1.5.2
+          haxelib git extension-webm https://github.com/KadeDev/extension-webm
+
+      - name: Rebuild extension-webm
+        run: haxelib run lime rebuild extension-webm ${{ matrix.target }}
+
+      - name: Build
+        run: haxelib run lime build ${{ matrix.target }} -release
+
+      - name: Package build
+        shell: pwsh
+        run: |
+          $binDirs = Get-ChildItem -Path export/release -Recurse -Directory -Filter bin
+          if ($binDirs.Count -eq 0) {
+            throw "No release bin directory found."
+          }
+
+          $staging = "release/trickster-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+
+          foreach ($bin in $binDirs) {
+            Copy-Item -Path (Join-Path $bin.FullName "*") -Destination $staging -Recurse -Force
+          }
+
+          Compress-Archive -Path "$staging/*" -DestinationPath "release/trickster-${{ matrix.target }}.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trickster-${{ matrix.target }}
+          path: release/trickster-${{ matrix.target }}.zip
+
+  android:
+    name: android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          sdkmanager "platforms;android-29" "build-tools;34.0.0" "ndk;21.4.7075529"
+          echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/21.4.7075529" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK=${ANDROID_HOME}" >> "$GITHUB_ENV"
+
+      - name: Configure Lime Android
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.lime"
+          cat > "$HOME/.lime/config.xml" <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <config>
+            <section id="defines">
+              <define name="ANDROID_SETUP" value="true" />
+              <define name="ANDROID_SDK" value="${ANDROID_HOME}" />
+              <define name="ANDROID_NDK_ROOT" value="${ANDROID_NDK_ROOT}" />
+              <define name="JAVA_HOME" value="${JAVA_HOME}" />
+            </section>
+          </config>
+          EOF
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@master
+        with:
+          haxe-version: 4.2.5
+
+      - name: Install Haxelibs
+        shell: bash
+        run: |
+          haxelib install lime 7.9.0
+          haxelib install openfl 9.0.2
+          haxelib install hxcpp
+          haxelib install flixel 4.11.0
+          haxelib install flixel-addons 2.8.0
+          haxelib install flixel-ui 2.3.3
+          haxelib install hscript 2.4.0
+          haxelib install actuate
+          haxelib install newgrounds 1.1.5
+          haxelib install polymod 1.5.2
+          haxelib git extension-androidtools https://github.com/jigsaw-4277821/extension-androidtools.git
+          haxelib git extension-webm https://github.com/KadeDev/extension-webm
+
+      - name: Patch extension-webm for Android
+        run: |
+          WEBM_DIR="$(haxelib path extension-webm | head -1)"
+          SRC="$WEBM_DIR/project/libwebm/mkvmuxerutil.cpp"
+          if [ -f "$SRC" ] && ! grep -q '#include <unistd.h>' "$SRC"; then
+            sed -i 's/#include <fcntl.h>/#include <fcntl.h>\n#include <unistd.h>/' "$SRC"
+          fi
+
+      - name: Rebuild extension-webm
+        run: haxelib run lime rebuild extension-webm android -DHXCPP_ARM64
+
+      - name: Build Android
+        run: haxelib run lime build android -release
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          mkdir -p release
+          apk="$(find export/release/android -name '*.apk' | head -n 1)"
+          if [[ -z "$apk" ]]; then
+            echo "No APK found."
+            exit 1
+          fi
+          cp "$apk" release/trickster-android.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trickster-android
+          path: release/trickster-android.apk
+
+  ios:
+    name: ios
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@master
+        with:
+          haxe-version: 4.2.5
+
+      - name: Install Haxelibs
+        shell: bash
+        run: |
+          haxelib install lime 7.9.0
+          haxelib install openfl 9.0.2
+          haxelib install hxcpp
+          haxelib install flixel 4.11.0
+          haxelib install flixel-addons 2.8.0
+          haxelib install flixel-ui 2.3.3
+          haxelib install hscript 2.4.0
+          haxelib install actuate
+          haxelib install newgrounds 1.1.5
+          haxelib install polymod 1.5.2
+          haxelib git extension-webm https://github.com/KadeDev/extension-webm
+
+      - name: Patch extension-webm for iOS
+        run: |
+          WEBM_DIR="$(haxelib path extension-webm | head -1)"
+          SRC="$WEBM_DIR/project/libwebm/mkvmuxerutil.cpp"
+          if [ -f "$SRC" ] && ! grep -q '#include <unistd.h>' "$SRC"; then
+            { echo '#include <unistd.h>'; cat "$SRC"; } > "$SRC.tmp" && mv "$SRC.tmp" "$SRC"
+          fi
+
+      - name: Rebuild extension-webm
+        run: haxelib run lime rebuild extension-webm ios
+
+      - name: Build iOS
+        run: haxelib run lime build ios -release -nosign
+
+      - name: Collect iOS build
+        shell: bash
+        run: |
+          mkdir -p release
+          ipa="$(find export/release/ios -name '*.ipa' | head -n 1)"
+          app="$(find export/release/ios -name '*.app' -type d | head -n 1)"
+
+          if [[ -n "$ipa" ]]; then
+            cp "$ipa" release/trickster-ios.ipa
+          elif [[ -n "$app" ]]; then
+            ditto -c -k --sequesterRsrc --keepParent "$app" release/trickster-ios.zip
+          else
+            echo "No iOS app or IPA found."
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trickster-ios
+          path: |
+            release/trickster-ios.ipa
+            release/trickster-ios.zip
+
+  release:
+    name: Upload release
+    needs:
+      - build
+      - android
+      - ios
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: trickster-*
+          merge-multiple: true
+
+      - name: Select release
+        id: release
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag_name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "release_name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_name=builds-latest" >> "$GITHUB_OUTPUT"
+            echo "release_name=Builds Latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          name: ${{ steps.release.outputs.release_name }}
+          prerelease: ${{ steps.release.outputs.prerelease }}
+          overwrite_files: true
+          files: release-assets/*
